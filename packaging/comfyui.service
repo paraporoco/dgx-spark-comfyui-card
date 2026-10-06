@@ -1,5 +1,5 @@
 [Unit]
-Description=ComfyUI (diffusion workflows on GB10, local NVMe install)
+Description=ComfyUI (diffusion workflows on GB10, local NVMe install, homeCA TLS)
 Documentation=https://github.com/comfyanonymous/ComfyUI
 After=network-online.target comfyui-card.service
 Wants=comfyui-card.service
@@ -16,7 +16,9 @@ Environment=HF_HUB_DISABLE_XET=1
 ExecStart=/opt/local/comfyui/.venv/bin/python main.py \
     --listen 0.0.0.0 --port 8188 \
     --preview-method auto \
-    --disable-auto-launch
+    --disable-auto-launch \
+    --tls-certfile /etc/homeca/tls/comfyui/served-fullchain.pem \
+    --tls-keyfile /etc/homeca/tls/comfyui/served-key.pem
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=30

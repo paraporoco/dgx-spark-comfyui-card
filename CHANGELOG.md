@@ -18,3 +18,13 @@ First release.
 - **Userscript 2.4.0** injects Local models, Live VLM and ComfyUI.
 - **tools/fetch-models.sh**: SDXL base 1.0 and FLUX.1-schnell fp8 all-in-one
   from ungated Hugging Face repos, `.part` then rename.
+
+## 1.1.0 — 2026-10-06
+
+- **TLS**: `comfyui.service` serves https with a homeCA certificate
+  (`--tls-certfile`/`--tls-keyfile` on the served pair the reload hook
+  composes). `packaging/homeca/` carries the agent item and the reload hook.
+- **Sidecar 1.1.0**: loopback probes follow `CC_UI_SCHEME`; verified against
+  `CC_TLS_CA` when readable, otherwise unverified on loopback only.
+- **card.js**: the Open block states the TLS origin instead of "plain HTTP".
+- Card links put the tailnet name first (trusted padlock on MagicDNS hosts).

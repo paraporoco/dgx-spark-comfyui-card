@@ -101,6 +101,14 @@ ComfyUI itself (`:8188`) binds `0.0.0.0` and is reached directly over the LAN
 or Tailscale; the card links to the right URL. It has **no authentication**:
 do not expose that port beyond networks you trust.
 
+## TLS (optional, homeCA)
+
+`packaging/homeca/` has what the deployed host uses: an item for
+`homeca-agent` and a reload hook that installs the served pair, restarts the
+user unit and proves the presented leaf verifies before keeping it. The unit
+then takes `--tls-certfile`/`--tls-keyfile`, and `comfyui-card.service` gets
+`CC_UI_SCHEME=https`. Any CA with a renewal agent fits the same two hooks.
+
 ## Files
 
 | Path | Role |

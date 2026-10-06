@@ -1,0 +1,15 @@
+# Append under `managed:` in /etc/homeca/agent.yaml (homeCA, github.com/paraporoco/homeCA).
+# The agent manages leaf/key/chain; the reload hook composes the served pair
+# (fullchain + key, owned by the service user) that comfyui.service reads via
+# --tls-certfile / --tls-keyfile, restarts the user unit and proves the new leaf
+# is presented and verifies before recording it as last-known-good.
+  - name: comfyui
+    profile: tls_server
+    cn: gx10.home
+    sans: ["DNS:gx10.home", "DNS:gx10", "DNS:gx10.tail09d5f4.ts.net", "IP:192.168.1.159", "IP:192.168.100.2", "IP:192.168.100.10", "IP:100.64.239.1", "IP:127.0.0.1"]
+    cert:  /etc/homeca/tls/comfyui/leaf.pem
+    key:   /etc/homeca/tls/comfyui/leaf.key
+    chain: /etc/homeca/tls/comfyui/chain.pem
+    mode: "0644"
+    key_mode: "0600"
+    reload: "/usr/local/sbin/comfyui-tls-reload"

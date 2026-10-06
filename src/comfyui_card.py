@@ -27,7 +27,7 @@ resident after a job is memory the llama-swap load gate (:8111) cannot give
 to a language model, and the gate refuses a load it cannot fit. One click
 hands the memory back.
 
-Version 1.0.0
+Version 1.1.0 - TLS-aware loopback probes (CC_UI_SCHEME=https)
 """
 
 import json
@@ -35,6 +35,7 @@ import os
 import re
 import shutil
 import socket
+import ssl
 import subprocess
 import threading
 import time
@@ -42,7 +43,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 HOST = os.environ.get("CC_HOST", "127.0.0.1")
 PORT = int(os.environ.get("CC_PORT", "8113"))
@@ -52,6 +53,21 @@ WEBROOT = os.environ.get("CC_WEBROOT", "/opt/local/comfyui-card/web")
 UI_SCHEME = os.environ.get("CC_UI_SCHEME", "http")
 UI_PORT = int(os.environ.get("CC_UI_PORT", "8188"))
 UI_URL = "%s://127.0.0.1:%d" % (UI_SCHEME, UI_PORT)
+# Loopback TLS probes. The homeCA served chain carries leaf + issuing CA but
+# not the root, and the root bundle under /etc/homeca/agent is root-only, so
+# verification is possible only when CC_TLS_CA names a readable bundle.
+# Otherwise the loopback call is unverified, as in live-vlm-card.
+TLS_CA = os.environ.get("CC_TLS_CA", "")
+
+
+def _ssl_ctx():
+    if UI_SCHEME != "https":
+        return None
+    if TLS_CA and os.access(TLS_CA, os.R_OK):
+        ctx = ssl.create_default_context(cafile=TLS_CA)
+        ctx.check_hostname = False     # SAN has IP:127.0.0.1 but keep it simple
+        return ctx
+    return ssl._create_unverified_context()
 PUBLIC_HOSTS = [h for h in os.environ.get(
     "CC_PUBLIC_HOSTS", "192.168.1.159,100.64.239.1").split(",") if h.strip()]
 
@@ -91,7 +107,8 @@ def _run(argv, timeout=15):
 
 def _get_json(url, timeout=3):
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    ctx = _ssl_ctx() if url.startswith("https:") else None
+    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
         return json.loads(r.read().decode("utf-8", "replace"))
 
 
@@ -99,7 +116,8 @@ def _post_json(url, payload, timeout=10):
     data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data,
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    ctx = _ssl_ctx() if url.startswith("https:") else None
+    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
         body = r.read().decode("utf-8", "replace")
         return r.status, body
 

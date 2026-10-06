@@ -9,9 +9,9 @@ Environment=CC_HOST=127.0.0.1
 Environment=CC_PORT=8113
 Environment=CC_UNIT=comfyui.service
 Environment=CC_WEBROOT=/opt/local/comfyui-card/web
-Environment=CC_UI_SCHEME=http
+Environment=CC_UI_SCHEME=https
 Environment=CC_UI_PORT=8188
-Environment=CC_PUBLIC_HOSTS=192.168.1.159,100.64.239.1
+Environment=CC_PUBLIC_HOSTS=gx10.tail09d5f4.ts.net,192.168.1.159,100.64.239.1
 Environment=CC_COMFY_DIR=/opt/local/comfyui/ComfyUI
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1

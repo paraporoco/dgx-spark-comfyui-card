@@ -1,0 +1,113 @@
+#!/bin/bash
+# comfyui-tls-reload -- `reload:` hook for the comfyui item in
+# /etc/homeca/agent.yaml on gx10. Same shape as homeca-api-reload:
+#
+#   1. PRE-FLIGHT: compose leaf+chain and load it with Python's TLS layer
+#      (ComfyUI is aiohttp -> ssl.load_cert_chain) before touching the service;
+#   2. install the SERVED pair (fullchain + key) the comfyui unit reads, restart
+#      the systemd *user* unit of drumea;
+#   3. PROVE it: the certificate presented on 127.0.0.1:8188 must be the new
+#      leaf, and must verify against both homeCA roots for 192.168.1.159 and
+#      gx10.home -- not merely `is-active`;
+#   4. success -> record the served pair as LAST KNOWN GOOD;
+#      failure -> restore LAST KNOWN GOOD (seeded with the old self-signed pair
+#      at install time), restart, exit 1 so homeca-agent rolls its own files back.
+#
+# The LKG copy is taken when a pair is PROVEN good, never at entry: the agent
+# installs the candidate before calling this, so an entry copy is the candidate.
+set -u
+
+D=/etc/homeca/tls/comfyui
+LEAF=$D/leaf.pem
+KEY=$D/leaf.key
+CHAIN=$D/chain.pem
+SERVED_CERT=$D/served-fullchain.pem
+SERVED_KEY=$D/served-key.pem
+LKG=/var/lib/homeca/comfyui-lkg
+TRUST=/etc/homeca/agent/ca-trust.pem
+OWNER=drumea
+UNIT=comfyui.service
+PORT=8188 
+TRIES=15          # x 2s
+
+log() { echo "comfyui-tls-reload: $*"; }
+
+for f in "$LEAF" "$KEY" "$CHAIN" "$TRUST"; do
+  [ -s "$f" ] || { log "missing or empty: $f"; exit 1; }
+done
+
+preflight() {
+  python3 - "$LEAF" "$KEY" "$CHAIN" <<'PY'
+import pathlib, ssl, sys, tempfile, os
+leaf, key, ca = (pathlib.Path(p) for p in sys.argv[1:4])
+d = pathlib.Path(tempfile.mkdtemp())
+tmp = d/"chain.pem"
+tmp.write_bytes(leaf.read_bytes() + ca.read_bytes())
+os.chmod(tmp, 0o600)
+try:
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(str(tmp), str(key))
+except Exception as e:
+    print("preflight: %s: %s" % (type(e).__name__, e), file=sys.stderr)
+    raise SystemExit(1)
+finally:
+    tmp.unlink(); d.rmdir()
+print("preflight ok")
+PY
+}
+
+install_pair() {   # $1 = fullchain source, $2 = key source
+  install -o "$OWNER" -g "$OWNER" -m 0600 "$2" "$SERVED_KEY.tmp" && mv -f "$SERVED_KEY.tmp" "$SERVED_KEY" &&
+  install -o "$OWNER" -g "$OWNER" -m 0644 "$1" "$SERVED_CERT.tmp" && mv -f "$SERVED_CERT.tmp" "$SERVED_CERT"
+}
+
+restart() { systemctl --user -M "$OWNER@" restart "$UNIT"; }
+
+fp() { openssl x509 -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2; }
+
+probe() {   # $1 = expected leaf fingerprint ("" = any)
+  local i got
+  for i in $(seq 1 $TRIES); do
+    sleep 2
+    got=$(openssl s_client -connect 127.0.0.1:$PORT -servername gx10.home </dev/null 2>/dev/null | fp)
+    [ -n "$got" ] || continue
+    if [ -n "$1" ] && [ "$got" != "$1" ]; then log "presented $got, expected $1"; return 1; fi
+    [ -z "$1" ] && return 0
+    for v in "-verify_ip 192.168.1.159" "-verify_hostname gx10.home"; do
+      openssl s_client -connect 127.0.0.1:$PORT -servername gx10.home -CAfile "$TRUST" \
+          -verify_return_error $v </dev/null >/dev/null 2>&1 \
+        || { log "chain does not verify ($v)"; return 1; }
+    done
+    return 0
+  done
+  log "no TLS answer on :$PORT after $((TRIES*2))s"
+  return 1
+}
+
+revert() {
+  if [ -s "$LKG/fullchain.pem" ] && [ -s "$LKG/key.pem" ]; then
+    log "restoring LAST KNOWN GOOD pair"
+    install_pair "$LKG/fullchain.pem" "$LKG/key.pem" && restart && probe "" \
+      && log "restored; service answering" || log "RESTORE FAILED -- ComfyUI down"
+  else
+    log "no LAST KNOWN GOOD pair recorded -- ComfyUI left as is"
+  fi
+}
+
+preflight || exit 1
+
+new=$(mktemp); trap 'rm -f "$new"' EXIT
+cat "$LEAF" "$CHAIN" > "$new"
+want=$(fp < "$LEAF")
+
+install_pair "$new" "$KEY" || { log "install failed"; revert; exit 1; }
+restart || { log "restart failed"; revert; exit 1; }
+if probe "$want"; then
+  install -d -m 0700 "$LKG"
+  install -m 0600 "$SERVED_CERT" "$LKG/fullchain.pem"
+  install -m 0600 "$SERVED_KEY" "$LKG/key.pem"
+  log "serving $want; recorded as last known good"
+  exit 0
+fi
+revert
+exit 1

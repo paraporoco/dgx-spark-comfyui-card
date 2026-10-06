@@ -1,4 +1,4 @@
-/* comfyui-card v1.0.0 — "ComfyUI" card for the NVIDIA DGX Dashboard.
+/* comfyui-card v1.1.0 — "ComfyUI" card for the NVIDIA DGX Dashboard.
  *
  * Third sibling of the "Local models" and "Live VLM" cards and deliberately
  * built the same way: touches no NVIDIA file, mounts one node into the card
@@ -261,7 +261,10 @@
         style: "color:" + OK + ";text-decoration:none;"
       }, [href]));
     });
-    rows.push(line("Plain HTTP, no authentication — reachable from the LAN and the tailnet only. " +
+    rows.push(line((st.ui_scheme === "https"
+                      ? "TLS from the home CA (trusted where the homeCA roots are installed). "
+                      : "Plain HTTP. ") +
+                   "No authentication — reachable from the LAN and the tailnet only. " +
                    "Through a tunnel, forward port " + st.ui_port + " as well.",
                    "opacity:.45;font-size:11px;"));
     return el("div", { style: "display:flex;flex-direction:column;gap:6px;" },

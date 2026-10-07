@@ -129,3 +129,17 @@ rm -f ~/.config/systemd/user/comfyui{,-card}.service
 systemctl --user daemon-reload
 sudo rm -rf /opt/local/comfyui-card /opt/local/comfyui   # the second one holds your models
 ```
+
+## Known issue: 403 when opening ComfyUI from the card
+
+ComfyUI (`server.py`, `origin_only_middleware`) returns 403 to every request
+with `Sec-Fetch-Site: cross-site`, and a link clicked on the dashboard card is
+exactly that. `patches/comfyui-allow-cross-site-navigation.patch` narrows the
+refusal to requests that are not a top-level `GET` navigation (cross-site
+fetches, subresources and all non-GET methods stay refused). Apply after each
+ComfyUI update:
+
+```bash
+cd /opt/local/comfyui/ComfyUI && patch -p0 < /path/to/patches/comfyui-allow-cross-site-navigation.patch
+systemctl --user restart comfyui
+```

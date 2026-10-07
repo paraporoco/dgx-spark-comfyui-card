@@ -28,3 +28,10 @@ First release.
   `CC_TLS_CA` when readable, otherwise unverified on loopback only.
 - **card.js**: the Open block states the TLS origin instead of "plain HTTP".
 - Card links put the tailnet name first (trusted padlock on MagicDNS hosts).
+
+## 1.1.1 — 2026-10-07
+
+- `patches/comfyui-allow-cross-site-navigation.patch`: ComfyUI 403s every
+  cross-site request, including the top-level navigation a card link makes.
+  The patch lets a cross-site top-level GET navigation through and keeps
+  refusing everything else.
